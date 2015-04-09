@@ -25,7 +25,8 @@
     <string name="str_login_state_download">数据下载</string>
     <string name="str_login_state_ok">加载成功！</string>
     <string name="str_login_edittext_null">用户名或密码不能为空！</string>
-    <string name="str_logoin_fail">用户名或密码不正确！</string>
+    <string name="str_login_verify_fail">用户名或密码不正确！</string>
+    <string name="str_login_network_break">连接失败，请检查网络连接！</string>
 
     <string name="str_routedatabase_view">路线库</string>
     <string name="str_device_view">设备</string>

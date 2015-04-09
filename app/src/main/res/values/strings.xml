@@ -24,7 +24,8 @@
     <string name="str_login_state_download">data downloading</string>
     <string name="str_login_state_ok">load success</string>
     <string name="str_login_edittext_null">user name or password can not be empty !</string>
-    <string name="str_logoin_fail">user name or password is not correct !</string>
+    <string name="str_login_verify_fail">user name or password is not correct !</string>
+    <string name="str_login_network_break">link fail, please check the network connection!</string>
 
     <string name="str_routedatabase_view">Route Database</string>
     <string name="str_device_view">Devices</string>

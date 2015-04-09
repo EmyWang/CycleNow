@@ -30,36 +30,45 @@ public class NetComunication extends Thread{
 
     /*msg type*/
     int UI_REFRESH = 0;
-    int LOGIN_VERIFY = 1;
+    int LOGIN_RESULT = 1;
 
-    /*Login_verify result*/
-    int LOGIN_VERIFY_SUCCESS = 0;
+    /*msg arg1, login result*/
+    int LOGIN_RESULT_FAIL = 0;
+    int LOGIN_RESULT_SUCCESS = 1;
+
+    /*msg arg2, period of login success*/
+    int LOGIN_COMPLETE_SUCCESS = 0;
+    int LOGIN_VERIFY_SUCCESS = 1;
+    int LOGIN_LOADDATA_SUCCESS = 2;
+
+    /*msg arg2, reason of login fail*/
+    int LOGIN_NETLINK_BREAK = 0;
     int LOGIN_VERIFY_FAIL = 1;
 
     public NetComunication(Handler handler){
         myhandler = handler;
-    //    InitSocket();
     }
 
-
-    public void InitSocket(){
+    public Boolean InitSocket(){
         try{
             socket = new Socket(ServerIP, ServerPort);
             output = new PrintWriter(new BufferedWriter(
                     new OutputStreamWriter(socket.getOutputStream(), bm)),
                     true);
-            //input = new InputStreamReader(socket.getInputStream());
-            //input = socket.getInputStream();
             input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         }
         catch (UnknownHostException e)
         {
-            //handleException(e, "unknown host exception: " + e.toString());
+            e.printStackTrace();
+            return false;
         }
         catch (IOException e)
         {
-            //handleException(e, "io exception: " + e.toString());
+            e.printStackTrace();
+            return false;
         }
+
+        return true;
     }
 
     @Override
@@ -76,16 +85,19 @@ public class NetComunication extends Thread{
                         if (!(line.isEmpty())) {
                             Message msg = new Message();
                             if (line.equals(verify_success)) {
-                                msg.what = LOGIN_VERIFY;
-                                msg.arg1 = LOGIN_VERIFY_SUCCESS;
+                                msg.what = LOGIN_RESULT;
+                                msg.arg1 = LOGIN_RESULT_SUCCESS;
+                                msg.arg2 = LOGIN_VERIFY_SUCCESS;
                             } else if (line.equals(verify_fail)) {
-                                msg.what = LOGIN_VERIFY;
-                                msg.arg1 = LOGIN_VERIFY_FAIL;
+                                msg.what = LOGIN_RESULT;
+                                msg.arg1 = LOGIN_RESULT_FAIL;
+                                msg.arg2 = LOGIN_VERIFY_FAIL;
                             }
                             myhandler.sendMessage(msg);
                             input.close();
+                            output.close();
                             socket.close();
-                            socket = null;
+                            return;
                         }
                     }
 
@@ -94,21 +106,36 @@ public class NetComunication extends Thread{
             }
             catch (UnknownHostException e)
             {
-                //handleException(e, "unknown host exception: " + e.toString());
+                e.printStackTrace();
             }
             catch (IOException e)
             {
-                //handleException(e, "io exception: " + e.toString());
+                e.printStackTrace();
             }
         }
     }
 
     public void CloseThread(){
         bclose = true;
-
+        try {
+            if (socket != null) {
+                input.close();
+                output.close();
+                socket.close();
+            }
+        }
+        catch (UnknownHostException e)
+        {
+            e.printStackTrace();
+        }
+        catch (IOException e){
+            e.printStackTrace();
+        }
     }
 
     public void SendMessage(String msg){
-        output.println(msg);
+        if(output != null) {
+            output.println(msg);
+        }
     }
 }

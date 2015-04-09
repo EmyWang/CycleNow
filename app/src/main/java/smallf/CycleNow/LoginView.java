@@ -35,7 +35,6 @@ import java.lang.String;
 
 public class LoginView extends Activity {
 
-
     EditText edittext_user;
     EditText edittext_password;
     Button btn_register;
@@ -43,11 +42,6 @@ public class LoginView extends Activity {
     ProgressBar progressbar_login;
     TextView textview_login_state;
 
-    UIThread loginthread;
-    VerifyThread thread_verify;
-    NetComunication netlink;
-
-    //NetComunication linkserver;
 
     int nProgressMax = 100;
     int nThresholdVerify = nProgressMax/3;
@@ -55,28 +49,31 @@ public class LoginView extends Activity {
     int nThresholdOver = nProgressMax-1;
 
     boolean bTerminateFlag = false; //置为true可停止登陆UI刷新
-    boolean bVerifySuccess = false;
+    boolean bGetRetVerify = false; //登陆信息验证标志，是否已获取验证结果
+    boolean bVerifySuccess = false; //验证结果
 
     /*msg type*/
     int UI_REFRESH = 0;
-    int LOGIN_VERIFY = 1;
-    int LOGIN_RESULT = 2;
+    int LOGIN_RESULT = 1;
 
-    /*login verify result*/
-    int LOGIN_VERIFY_SUCCESS = 0;
+    /*msg arg1, login result*/
+    int LOGIN_RESULT_FAIL = 0;
+    int LOGIN_RESULT_SUCCESS = 1;
+
+    /*msg arg2, period of login success*/
+    int LOGIN_COMPLETE_SUCCESS = 0;
+    int LOGIN_VERIFY_SUCCESS = 1;
+    int LOGIN_LOADDATA_SUCCESS = 2;
+
+    /*msg arg2, reason of login fail*/
+    int LOGIN_NETLINK_BREAK = 0;
     int LOGIN_VERIFY_FAIL = 1;
 
-    /*login result*/
-    int LOGIN_RESULT_SUCCESS = 0;
-    int LOGIN_RESULT_FAIL = 1;
-
-    DBHelper helper;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         setContentView(R.layout.loginview);
-    //    getWindow().setFeatureInt(Window.FEATURE_CUSTOM_TITLE, R.layout.customtitle);
 
         edittext_user = (EditText)findViewById(R.id.login_edittext_user);
         edittext_password = (EditText)findViewById(R.id.login_edittext_password);
@@ -84,12 +81,8 @@ public class LoginView extends Activity {
         btn_login = (Button)findViewById(R.id.login_btn_login);
         progressbar_login = (ProgressBar)findViewById(R.id.login_progressBar_login);
         textview_login_state = (TextView)findViewById(R.id.login_textview_loginstate);
-        netlink = new NetComunication(myhandler);
 
 
-        /*开发过程写入nama，password方便登陆，后续删除*/
-        edittext_user.setText("李四");
-        edittext_password.setText("123");
         btn_register.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -119,69 +112,46 @@ public class LoginView extends Activity {
 
                 bTerminateFlag = false;
                 bVerifySuccess = false;
-                loginthread = new UIThread();
-                loginthread.start();
-                //NetComunication.Instance().start();
+                bGetRetVerify = false;
+                new UIThread().start();
                 new VerifyThread().start();
-
-
-                //添加用户验证
-                //DBHelper helper = new DBHelper(getApplicationContext());
-
-
             }
         });
 
-        //InitSQLValue();
-
+        /*开发过程写入nama，password方便登陆，后续删除*/
+        edittext_user.setText("李四");
+        edittext_password.setText("123");
     }
 
-    /*private void InitSQLValue(){
-        String name = "李四";
-        String desc = "123";
-        ContentValues values = new ContentValues();
-        values.put("name", name);
-        values.put("desc", desc);
-        helper = new DBHelper(getApplicationContext());
-        helper.insert(values);
-    }*/
-
-    private Boolean VerifyUser(String username, String password){
-        Cursor c = helper.query();
-        if(c.moveToFirst() == false){
-            return true;
-        }
-
-        int nNameIndex = c.getColumnIndex("name");
-        int nPasswordIndex = c.getColumnIndex("desc");
-
-        while(c.moveToNext()){
-            if(c.getString(nNameIndex).equals(username) && c.getString(nPasswordIndex).equals(password)){
-                helper.close();
-                return true;
-            }
-        }
-        helper.close();
-        return false;
+    private void SendMessage2Handler(int msgtype, int arg1, int arg2){
+        Message msg = new Message();
+        msg.what = msgtype;
+        msg.arg1 = arg1;
+        msg.arg2 = arg2;
+        myhandler.sendMessage(msg);
     }
 
-    String str = "abc";
     class VerifyThread extends Thread{
         @Override
         public void run(){
-            netlink.InitSocket();
+            NetComunication netlink = new NetComunication(myhandler);
+            if(!netlink.InitSocket()){
+                bTerminateFlag = true;
+                SendMessage2Handler(LOGIN_RESULT, LOGIN_RESULT_FAIL, LOGIN_NETLINK_BREAK);
+                return ;
+            }
             netlink.start();
             String name = edittext_user.getText().toString();
             String password = edittext_password.getText().toString();
             String msg = "login" + ":" + name + ":" + password;
             netlink.SendMessage(msg);
-            SystemClock.sleep(2000);
+            SystemClock.sleep(3000);
             /*登陆验证超时*/
-            if(!bVerifySuccess){
+            if(!bGetRetVerify){
                 bTerminateFlag = true;
+                SendMessage2Handler(LOGIN_RESULT, LOGIN_RESULT_FAIL, LOGIN_NETLINK_BREAK);
             }
             netlink.CloseThread();
-
         }
     }
 
@@ -190,26 +160,17 @@ public class LoginView extends Activity {
         public void run() {
             int nProgress = 0;
             while((!bTerminateFlag) && (nProgress < nProgressMax)) {
-                Message msg = new Message();
-                msg.what = UI_REFRESH;
-                msg.arg1 = nProgress;
-                LoginView.this.myhandler.sendMessage(msg);
+                SendMessage2Handler(UI_REFRESH, nProgress, -1);
                 nProgress++;
                 if(nProgress == nThresholdVerify && bVerifySuccess == false){
                     nProgress--;
                 }
                 SystemClock.sleep(15);
             }
-            Message msg = new Message();
-            if(bTerminateFlag){
-                msg.what = LOGIN_RESULT;
-                msg.arg1 = LOGIN_RESULT_FAIL;
+
+            if(!bTerminateFlag) {
+                SendMessage2Handler(LOGIN_RESULT, LOGIN_RESULT_SUCCESS,LOGIN_COMPLETE_SUCCESS);
             }
-            else {
-                msg.what = LOGIN_RESULT;
-                msg.arg1 = LOGIN_RESULT_SUCCESS;
-            }
-            LoginView.this.myhandler.sendMessage(msg);
         }
     }
 
@@ -228,37 +189,44 @@ public class LoginView extends Activity {
                 }
                 progressbar_login.setProgress(msg.arg1);
             }
-            else if (msg.what == LOGIN_VERIFY){
-                if(msg.arg1 == LOGIN_VERIFY_FAIL){
-                    bTerminateFlag = true;
-                }
-                else if(msg.arg1 == LOGIN_VERIFY_SUCCESS){
-                    bVerifySuccess = true;
-                }
-            }
             else if (msg.what == LOGIN_RESULT) {
+                bGetRetVerify = true;
+                /*登陆失败*/
                 if(msg.arg1 == LOGIN_RESULT_FAIL){
                     progressbar_login.setVisibility(View.GONE);
                     edittext_user.setEnabled(true);
                     edittext_password.setEnabled(true);
                     btn_login.setEnabled(true);
-
                     textview_login_state.setTextColor(Color.rgb(255,0,0));
                     textview_login_state.setVisibility(View.VISIBLE);
-                    textview_login_state.setText(R.string.str_logoin_fail);
-                }
-                else if(msg.arg1 == LOGIN_RESULT_SUCCESS){
-                    progressbar_login.setVisibility(View.GONE);
-                    textview_login_state.setVisibility(View.GONE);
-                    edittext_user.setEnabled(true);
-                    edittext_password.setEnabled(true);
-                    btn_login.setEnabled(true);
 
-                    Intent in = new Intent();
-                    in.setClassName(getApplicationContext(), "smallf.CycleNow.MainFrameView");
-                    startActivity(in);
-                    LoginView.this.finish();
+                    /*描述登陆失败原因*/
+                    if(msg.arg2 == LOGIN_NETLINK_BREAK){
+                        textview_login_state.setText(R.string.str_login_network_break);
+                    }
+                    else if(msg.arg2 == LOGIN_VERIFY_FAIL){
+                        textview_login_state.setText(R.string.str_login_verify_fail);
+                    }
                 }
+                else if(msg.arg1 == LOGIN_RESULT_SUCCESS)
+                {
+                    if(msg.arg2 == LOGIN_VERIFY_SUCCESS){
+                        bVerifySuccess = true;
+                    }
+                    else if(msg.arg2 == LOGIN_COMPLETE_SUCCESS){
+                        progressbar_login.setVisibility(View.GONE);
+                        textview_login_state.setVisibility(View.GONE);
+                        edittext_user.setEnabled(true);
+                        edittext_password.setEnabled(true);
+                        btn_login.setEnabled(true);
+
+                        Intent in = new Intent();
+                        in.setClassName(getApplicationContext(), "smallf.CycleNow.MainFrameView");
+                        startActivity(in);
+                        LoginView.this.finish();
+                    }
+                }
+
             }
 
             super.handleMessage(msg);
